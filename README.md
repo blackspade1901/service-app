@@ -1,22 +1,23 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Local Service Provider Platform (Next.js 14 Migration)
 
-## Getting Started
+## Prerequisites
+- Node.js 18+
+- Supabase Project
+- Razorpay API Keys
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Environment Variables (.env.local)
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
+SUPABASE_SERVICE_ROLE_KEY=your_secret_key # Server Only
+ENCRYPTION_KEY=32_byte_hex_key           # Server Only
+RAZORPAY_WEBHOOK_SECRET=your_secret      # Server Only
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup Instructions
+1. `npm install @supabase/ssr @supabase/supabase-js lucide-react leaflet react-leaflet crypto-js`
+2. `npx supabase gen types typescript --project-id your_id > src/types/database.ts`
+3. `npm run dev`
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
