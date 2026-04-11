@@ -4,9 +4,10 @@ import { decrypt } from '@/lib/encryption/crypto';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -18,7 +19,7 @@ export async function GET(
     const { data: provider, error } = await supabase
       .from('providers')
       .select('phone')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error || !provider) {
@@ -26,7 +27,7 @@ export async function GET(
     }
 
     // Decrypt phone
-    const decryptedPhone = decrypt(provider.phone, process.env.ENCRYPTION_KEY!);
+    const decryptedPhone = decrypt(provider.phone);
 
     return NextResponse.json({ phone: decryptedPhone });
   } catch (error) {

@@ -1,23 +1,28 @@
-import { encrypt } from '@/lib/encryption/crypto';
-import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { encrypt } from '@/lib/encryption/crypto'
 
 export async function POST(req: Request) {
-  const supabase = createClient();
-  const { provider_id, aadhaar_number, phone_number } = await req.json();
+  try {
+    const supabase = await createClient()
+    const body = await req.json()
+    const { provider_id, aadhaar_number, phone_number } = body
 
-  // Encrypt sensitive PII
-  const encryptedAadhaar = encrypt(aadhaar_number);
-  const encryptedPhone = encrypt(phone_number);
+    const encryptedAadhaar = encrypt(aadhaar_number)
+    const encryptedPhone = encrypt(phone_number)
 
-  const { error } = await supabase
-    .from('kyc_documents')
-    .insert({
+    const { error } = await supabase.from('kyc_documents').insert({
       provider_id,
-      form_data_encrypted: encryptedAadhaar, // [Aadhaar Redacted] in logs
+      form_data_encrypted: encryptedAadhaar,
       phone_encrypted: encryptedPhone,
-      // ...other fields
-    });
+    })
 
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400 });
-  return new Response(JSON.stringify({ success: true }), { status: 200 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ success: true }, { status: 200 })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

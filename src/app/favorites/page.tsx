@@ -1,10 +1,5 @@
-import { FavoritesScreen } from '@/components/screens/FavoritesScreen';
-import { Layout } from '@/components/Layout';
+import { FavoritesPageClient } from '@/components/favorites/FavoritesPageClient'
 
 export default function FavoritesPage() {
-  return (
-    <Layout>
-      <FavoritesScreen />
-    </Layout>
-  );
+  return <FavoritesPageClient />
 }

@@ -1,10 +1,9 @@
-import { CustomerDashboardScreen } from '@/components/screens/CustomerDashboardScreen';
-import { Layout } from '@/components/Layout';
+/**
+ * Booking history for the signed-in customer (past appointments list).
+ * For scheduling a new job with a specific provider, use /booking/[providerId].
+ */
+import { BookingHistoryClient } from '@/components/booking/BookingHistoryClient'
 
-export default function BookingsPage() {
-  return (
-    <Layout>
-      <CustomerDashboardScreen />
-    </Layout>
-  );
+export default function BookingsHistoryPage() {
+  return <BookingHistoryClient />
 }

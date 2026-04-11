@@ -4,9 +4,10 @@ import { decrypt } from '@/lib/encryption/crypto';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -29,7 +30,7 @@ export async function GET(
     const { data: provider, error } = await supabase
       .from('providers')
       .select('aadhaar')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error || !provider) {
@@ -37,7 +38,7 @@ export async function GET(
     }
 
     // Decrypt aadhaar
-    const decryptedAadhaar = decrypt(provider.aadhaar, process.env.ENCRYPTION_KEY!);
+    const decryptedAadhaar = decrypt(provider.aadhaar);
 
     return NextResponse.json({ aadhaar: decryptedAadhaar });
   } catch (error) {

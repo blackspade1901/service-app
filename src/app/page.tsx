@@ -1,10 +1,5 @@
-import { HomeScreen } from '@/components/screens/HomeScreen';
-import { Layout } from '@/components/Layout';
+import { HomePageClient } from '@/components/home/HomePageClient'
 
 export default function HomePage() {
-  return (
-    <Layout showFooter={false}>
-      <HomeScreen />
-    </Layout>
-  );
+  return <HomePageClient />
 }
