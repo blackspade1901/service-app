@@ -1,28 +1,27 @@
 // src/components/MapInner.tsx — FULL REPLACEMENT
 'use client'
-import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { useEffect } from 'react'
+import Link from 'next/link'
 
-// Fix broken default marker icons in webpack/turbopack builds
 const fixLeafletIcons = () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delete (L.Icon.Default.prototype as any)._getIconUrl
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
   L.Icon.Default.mergeOptions({
-    iconUrl: '/leaflet/marker-icon.png',
-    iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-    shadowUrl: '/leaflet/marker-shadow.png',
-  })
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  });
 }
 
 interface Provider {
-  id: number
-  name: string
-  service: string
-  lat: number
-  lng: number
-  available: boolean
+  id: string
+  full_name: string
+  service_category: string | null
+  avg_rating: number | null
+  is_live: boolean
+  lat: number | null
+  lng: number | null
 }
 
 interface MapInnerProps {
@@ -51,14 +50,19 @@ export default function MapInner({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {providers.map((provider) => (
-        <Marker key={provider.id} position={[provider.lat, provider.lng]}>
+      {providers.filter(p => p.lat && p.lng).map((provider) => (
+        <Marker key={provider.id} position={[provider.lat!, provider.lng!]}>
           <Popup>
-            <strong>{provider.name}</strong><br />
-            {provider.service}<br />
-            <span style={{ color: provider.available ? 'green' : 'gray' }}>
-              {provider.available ? 'Available' : 'Busy'}
+            <strong>{provider.full_name}</strong><br />
+            {provider.service_category}<br />
+            {provider.avg_rating && <span>★ {provider.avg_rating.toFixed(1)}</span>}<br />
+            <span style={{ color: provider.is_live ? 'green' : 'gray' }}>
+              {provider.is_live ? 'Available' : 'Busy'}
             </span>
+            <br />
+            <Link href={`/provider/${provider.id}`} style={{ color: '#9333ea', fontWeight: 'bold' }}>
+              View Profile
+            </Link>
           </Popup>
         </Marker>
       ))}
