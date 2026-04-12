@@ -2,18 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, MapPin, Shield, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { ReactNode } from 'react'
 import { motion } from 'motion/react'
 
-const links = [
-  { href: '/customer', label: 'Customer', icon: LayoutDashboard },
-  { href: '/provider', label: 'Provider', icon: MapPin },
-  { href: '/admin', label: 'Admin', icon: Shield },
-]
-
-export function DashboardShell({ children }: { children: ReactNode }) {
+export function DashboardShell({ children, role }: { children: ReactNode; role: 'customer' | 'provider' | 'admin' }) {
   const pathname = usePathname()
+
+  const links = {
+    customer: [{ href: '/customer', label: 'My Dashboard' }, { href: '/bookings', label: 'My Bookings' }, { href: '/favorites', label: 'Favourites' }],
+    provider: [{ href: '/provider', label: 'My Dashboard' }, { href: '/bookings', label: 'Bookings' }],
+    admin:    [{ href: '/admin', label: 'Admin Panel' }],
+  }[role]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex">
@@ -25,7 +25,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          {links.map(({ href, label, icon: Icon }) => {
+          {links.map(({ href, label }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`)
             return (
               <Link key={href} href={href}>
@@ -37,7 +37,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                       : 'text-slate-600 hover:bg-purple-50'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
                   {label}
                 </motion.div>
               </Link>
@@ -45,9 +44,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-purple-100 text-xs text-slate-500">
-          <Link href="/" className="text-purple-600 font-medium hover:underline">
-            ← Back to app
-          </Link>
+          <Link href="/" className="text-purple-600 font-medium hover:underline">← Back to app</Link>
         </div>
       </aside>
 

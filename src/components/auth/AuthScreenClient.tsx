@@ -1,30 +1,181 @@
 'use client'
-import { useState } from 'react';
-import Link from 'next/link';
-import { User, Mail, Lock, Phone, MapPin, ArrowRight, Check, Sparkles } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+/**
+ * FILE: src/components/auth/AuthScreenClient.tsx
+ *
+ * Login and Register screen.
+ * - Login: calls supabase.auth.signInWithPassword(), then redirects by role.
+ * - Register: POSTs to /api/auth/register, then signs in immediately.
+ *
+ * Both forms are fully wired — no cosmetic buttons.
+ */
+import { useState, useRef, FormEvent } from 'react'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  User, Mail, Lock, Phone, MapPin, ArrowRight, Check, Sparkles, AlertCircle, Loader2
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import { createClient } from '@/lib/supabase/client'
 
 export function AuthScreenClient({ variant }: { variant: 'login' | 'register' }) {
-  const isLogin = variant === 'login';
-  const [userType, setUserType] = useState<'customer' | 'provider'>('customer');
+  const isLogin = variant === 'login'
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') ?? null
+
+  const [userType, setUserType] = useState<'customer' | 'provider'>('customer')
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
+  // Refs for uncontrolled inputs (avoids re-renders on every keystroke).
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const fullNameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
+
+  const supabase = createClient()
+
+  // Redirect user to the correct dashboard based on their role.
+  async function redirectByRole() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    // If a redirect was requested (e.g. from middleware), honour it.
+    if (redirectTo) {
+      router.replace(redirectTo)
+      return
+    }
+
+    const dest =
+      profile?.role === 'admin'
+        ? '/admin'
+        : profile?.role === 'provider'
+          ? '/provider'
+          : '/customer'
+
+    router.replace(dest)
+  }
+
+  // --------------------------------------------------------------------------
+  // Login handler
+  // --------------------------------------------------------------------------
+  async function handleLogin(e: FormEvent) {
+    e.preventDefault()
+    setErrorMsg(null)
+    setLoading(true)
+
+    const email = emailRef.current?.value?.trim() ?? ''
+    const password = passwordRef.current?.value ?? ''
+
+    if (!email || !password) {
+      setErrorMsg('Email and password are required.')
+      setLoading(false)
+      return
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setErrorMsg(
+        error.message === 'Invalid login credentials'
+          ? 'Incorrect email or password.'
+          : error.message
+      )
+      setLoading(false)
+      return
+    }
+
+    await redirectByRole()
+    // router.replace triggers navigation — loading spinner stays until unmount.
+  }
+
+  // --------------------------------------------------------------------------
+  // Register handler
+  // --------------------------------------------------------------------------
+  async function handleRegister(e: FormEvent) {
+    e.preventDefault()
+    setErrorMsg(null)
+    setLoading(true)
+
+    const email = emailRef.current?.value?.trim() ?? ''
+    const password = passwordRef.current?.value ?? ''
+    const full_name = fullNameRef.current?.value?.trim() ?? ''
+    const phone = phoneRef.current?.value?.trim() ?? ''
+
+    if (!email || !password || !full_name) {
+      setErrorMsg('Email, password, and full name are required.')
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 8) {
+      setErrorMsg('Password must be at least 8 characters.')
+      setLoading(false)
+      return
+    }
+
+    // POST to /api/auth/register
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, full_name, phone, userType }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      setErrorMsg(data.error ?? 'Registration failed. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    if (!data.sessionAvailable) {
+      // Email confirmation required — tell user to check their inbox.
+      setSuccessMsg(
+        'Account created! Please check your email and click the confirmation link, then sign in.'
+      )
+      setLoading(false)
+      return
+    }
+
+    // Session is live — sign in immediately so middleware can read cookies.
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (signInError) {
+      setSuccessMsg('Account created! Please sign in to continue.')
+      setLoading(false)
+      router.replace('/login')
+      return
+    }
+
+    // Redirect based on role.
+    if (userType === 'provider') {
+      router.replace('/provider/register')
+    } else {
+      router.replace('/customer')
+    }
+  }
+
+  const handleSubmit = isLogin ? handleLogin : handleRegister
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-100 via-pink-50 to-cyan-100 flex items-center justify-center p-4 py-8 relative overflow-hidden">
-      {/* Animated Background Elements */}
+      {/* Animated background blobs */}
       <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-          rotate: [0, 90, 0],
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
         className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl"
       />
       <motion.div
-        animate={{
-          scale: [1.2, 1, 1.2],
-          rotate: [0, -90, 0],
-        }}
-        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        animate={{ scale: [1.2, 1, 1.2], rotate: [0, -90, 0] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
         className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-br from-cyan-400/20 to-purple-400/20 rounded-full blur-3xl"
       />
 
@@ -34,196 +185,128 @@ export function AuthScreenClient({ variant }: { variant: 'login' | 'register' })
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-md relative z-10"
       >
-        {/* Card */}
-        <motion.div
-          whileHover={{ y: -5 }}
-          className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-purple-200 overflow-hidden"
-        >
+        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-purple-200 overflow-hidden">
           {/* Header */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 p-8 text-white text-center relative overflow-hidden"
-          >
+          <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 p-8 text-white text-center relative overflow-hidden">
             <motion.div
               animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
               className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"
             />
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.3, type: "spring" }}
-              className="flex items-center justify-center gap-2 mb-4"
-            >
+            <div className="flex items-center justify-center gap-2 mb-4 relative z-10">
               <Sparkles className="w-8 h-8" />
-              <h1 className="text-3xl font-bold relative z-10">
+              <h1 className="text-3xl font-bold">
                 {isLogin ? 'Welcome Back' : 'Join LocalServe'}
               </h1>
-            </motion.div>
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-purple-100 relative z-10"
-            >
-              {isLogin
-                ? 'Sign in to continue'
-                : 'Create your account to get started'
-              }
-            </motion.p>
-          </motion.div>
+            </div>
+            <p className="text-purple-100 relative z-10">
+              {isLogin ? 'Sign in to continue' : 'Create your account to get started'}
+            </p>
+          </div>
 
-          {/* Toggle Login/Register */}
           <div className="p-6 md:p-8">
+            {/* Login / Register tab switcher */}
             <div className="flex gap-2 p-1 bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl mb-6">
               <Link
                 href="/login"
-                className={`
-                  flex-1 py-3 rounded-xl font-semibold transition-all relative overflow-hidden text-center
-                  ${isLogin
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'text-slate-600 hover:text-slate-900'
-                  }
-                `}
+                className={`flex-1 py-3 rounded-xl font-semibold transition-all text-center ${
+                  isLogin ? 'bg-white text-purple-700 shadow-lg' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                {isLogin && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-0 bg-white rounded-xl"
-                  />
-                )}
-                <span className="relative z-10">Login</span>
+                Login
               </Link>
               <Link
                 href="/register"
-                className={`
-                  flex-1 py-3 rounded-xl font-semibold transition-all relative overflow-hidden text-center
-                  ${!isLogin
-                    ? 'bg-white text-purple-700 shadow-lg'
-                    : 'text-slate-600 hover:text-slate-900'
-                  }
-                `}
+                className={`flex-1 py-3 rounded-xl font-semibold transition-all text-center ${
+                  !isLogin ? 'bg-white text-purple-700 shadow-lg' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                {!isLogin && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-0 bg-white rounded-xl"
-                  />
-                )}
-                <span className="relative z-10">Register</span>
+                Register
               </Link>
             </div>
 
-            {/* User Type Selection (Register Only) */}
-            <AnimatePresence mode="wait">
+            {/* Error / Success banners */}
+            <AnimatePresence>
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-2xl mb-5"
+                >
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-semibold text-red-700">{errorMsg}</p>
+                </motion.div>
+              )}
+              {successMsg && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="flex items-start gap-3 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl mb-5"
+                >
+                  <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-semibold text-emerald-700">{successMsg}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* User type selector — register only */}
+            <AnimatePresence>
               {!isLogin && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mb-6"
+                  className="mb-6 overflow-hidden"
                 >
-                  <label className="text-sm font-bold text-slate-900 mb-3 block">
-                    I am a...
-                  </label>
+                  <label className="text-sm font-bold text-slate-900 mb-3 block">I am a...</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <motion.button
-                      whileHover={{ scale: 1.05, y: -2 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setUserType('customer')}
-                      className={`
-                        flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all
-                        ${userType === 'customer'
-                          ? 'border-purple-500 bg-gradient-to-br from-purple-100 to-pink-100 shadow-lg shadow-purple-500/30'
-                          : 'border-purple-200 hover:border-purple-400 hover:bg-purple-50'
-                        }
-                      `}
-                    >
-                      <User className={`w-8 h-8 ${userType === 'customer' ? 'text-purple-600' : 'text-slate-600'}`} />
-                      <span className="font-bold text-slate-900">Customer</span>
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05, y: -2 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setUserType('provider')}
-                      className={`
-                        flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all
-                        ${userType === 'provider'
-                          ? 'border-purple-500 bg-gradient-to-br from-purple-100 to-pink-100 shadow-lg shadow-purple-500/30'
-                          : 'border-purple-200 hover:border-purple-400 hover:bg-purple-50'
-                        }
-                      `}
-                    >
-                      <MapPin className={`w-8 h-8 ${userType === 'provider' ? 'text-purple-600' : 'text-slate-600'}`} />
-                      <span className="font-bold text-slate-900">Provider</span>
-                    </motion.button>
+                    {(['customer', 'provider'] as const).map((type) => (
+                      <motion.button
+                        key={type}
+                        type="button"
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setUserType(type)}
+                        className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all ${
+                          userType === type
+                            ? 'border-purple-500 bg-gradient-to-br from-purple-100 to-pink-100 shadow-lg shadow-purple-500/30'
+                            : 'border-purple-200 hover:border-purple-400 hover:bg-purple-50'
+                        }`}
+                      >
+                        {type === 'customer' ? (
+                          <User className={`w-8 h-8 ${userType === type ? 'text-purple-600' : 'text-slate-600'}`} />
+                        ) : (
+                          <MapPin className={`w-8 h-8 ${userType === type ? 'text-purple-600' : 'text-slate-600'}`} />
+                        )}
+                        <span className="font-bold text-slate-900 capitalize">{type}</span>
+                      </motion.button>
+                    ))}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Form */}
-            <motion.form
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="space-y-5"
-            >
-              <AnimatePresence mode="wait">
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {/* Full name — register only */}
+              <AnimatePresence>
                 {!isLogin && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
                   >
-                    <label className="text-sm font-bold text-slate-900 mb-2 block">
-                      Full Name
-                    </label>
-                    <motion.div
-                      whileFocus={{ scale: 1.02 }}
-                      className="relative"
-                    >
-                      <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
-                      <input
-                        type="text"
-                        placeholder="John Doe"
-                        className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
-                      />
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div>
-                <label className="text-sm font-bold text-slate-900 mb-2 block">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
-                  />
-                </div>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {!isLogin && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <label className="text-sm font-bold text-slate-900 mb-2 block">
-                      Phone Number
-                    </label>
+                    <label className="text-sm font-bold text-slate-900 mb-2 block">Full Name</label>
                     <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
                       <input
-                        type="tel"
-                        placeholder="+1 (555) 000-0000"
+                        ref={fullNameRef}
+                        type="text"
+                        placeholder="Rajan Kumar"
+                        autoComplete="name"
                         className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
                       />
                     </div>
@@ -231,118 +314,136 @@ export function AuthScreenClient({ variant }: { variant: 'login' | 'register' })
                 )}
               </AnimatePresence>
 
+              {/* Email */}
               <div>
-                <label className="text-sm font-bold text-slate-900 mb-2 block">
-                  Password
-                </label>
+                <label className="text-sm font-bold text-slate-900 mb-2 block">Email Address</label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
                   <input
-                    type="password"
-                    placeholder="••••••••"
+                    ref={emailRef}
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
                     className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
                   />
                 </div>
               </div>
 
+              {/* Phone — register only */}
+              <AnimatePresence>
+                {!isLogin && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <label className="text-sm font-bold text-slate-900 mb-2 block">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
+                      <input
+                        ref={phoneRef}
+                        type="tel"
+                        placeholder="+91 98765 43210"
+                        autoComplete="tel"
+                        className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Password */}
+              <div>
+                <label className="text-sm font-bold text-slate-900 mb-2 block">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
+                  <input
+                    ref={passwordRef}
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    required
+                    minLength={8}
+                    className="w-full pl-12 pr-4 py-3.5 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none focus:shadow-lg focus:shadow-purple-500/20 transition-all bg-white"
+                  />
+                </div>
+                {!isLogin && (
+                  <p className="text-xs text-slate-500 mt-1 ml-1">Minimum 8 characters.</p>
+                )}
+              </div>
+
+              {/* Forgot password — login only */}
               {isLogin && (
-                <div className="flex items-center justify-between text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
-                    <span className="text-slate-700 font-medium group-hover:text-purple-600 transition-colors">Remember me</span>
-                  </label>
-                  <motion.a
-                    whileHover={{ scale: 1.05 }}
-                    href="#"
+                <div className="flex items-center justify-end text-sm">
+                  <Link
+                    href="/forgot-password"
                     className="text-purple-600 hover:text-pink-600 font-semibold transition-colors"
                   >
                     Forgot password?
-                  </motion.a>
+                  </Link>
                 </div>
               )}
 
+              {/* Submit */}
               <motion.button
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: loading ? 1 : 1.02, y: loading ? 0 : -2 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center justify-center gap-2 group mt-6 relative overflow-hidden"
+                disabled={loading}
+                className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-purple-500/50 transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </motion.button>
+            </form>
+
+            {/* Provider info block — register only */}
+            <AnimatePresence>
+              {!isLogin && userType === 'provider' && (
                 <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-pink-600 via-purple-600 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                />
-                <span className="relative z-10">{isLogin ? 'Sign In' : 'Create Account'}</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
-              </motion.button>
-            </motion.form>
-
-            {/* Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t-2 border-purple-200" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-4 bg-white text-slate-600 font-semibold">Or continue with</span>
-              </div>
-            </div>
-
-            {/* Social Login */}
-            <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center justify-center gap-2 px-4 py-3.5 border-2 border-purple-200 rounded-xl hover:bg-purple-50 hover:border-purple-400 transition-all hover:shadow-lg"
-              >
-                <div className="w-5 h-5 bg-gradient-to-br from-blue-600 to-blue-700 rounded" />
-                <span className="font-bold text-slate-900">Google</span>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center justify-center gap-2 px-4 py-3.5 border-2 border-purple-200 rounded-xl hover:bg-purple-50 hover:border-purple-400 transition-all hover:shadow-lg"
-              >
-                <div className="w-5 h-5 bg-gradient-to-br from-slate-900 to-slate-700 rounded" />
-                <span className="font-bold text-slate-900">Apple</span>
-              </motion.button>
-            </div>
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="mt-6 p-5 bg-gradient-to-br from-purple-100 to-pink-100 rounded-2xl border-2 border-purple-300"
+                >
+                  <p className="font-bold text-purple-900 mb-3 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5" />
+                    After registration you will:
+                  </p>
+                  <ul className="space-y-2">
+                    {[
+                      'Complete your business profile',
+                      'Upload KYC documents',
+                      'Wait for admin approval (24-48 hours)',
+                      'Pay the one-time registration fee',
+                      'Go live and start accepting bookings',
+                    ].map((step, i) => (
+                      <motion.li
+                        key={i}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.08 }}
+                        className="flex items-start gap-2 text-sm text-purple-900"
+                      >
+                        <Check className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                        <span>{step}</span>
+                      </motion.li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </motion.div>
-
-        {/* Additional Info for Providers */}
-        <AnimatePresence>
-          {!isLogin && userType === 'provider' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="mt-6 p-5 bg-gradient-to-br from-purple-100 to-pink-100 rounded-2xl border-2 border-purple-300 backdrop-blur-xl"
-            >
-              <p className="font-bold text-purple-900 mb-3 flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                Next Steps After Registration:
-              </p>
-              <ul className="space-y-2">
-                {[
-                  'Complete your business profile',
-                  'Upload verification documents',
-                  'Wait for admin approval (24-48 hours)',
-                  'Start accepting bookings!'
-                ].map((step, index) => (
-                  <motion.li
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-start gap-2 text-sm text-purple-900"
-                  >
-                    <Check className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                    <span>{step}</span>
-                  </motion.li>
-                ))}
-              </ul>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
       </motion.div>
     </div>
-  );
+  )
 }
